@@ -26,6 +26,7 @@ import org.bukkit.damage.DamageSource;
 import org.bukkit.damage.DamageType;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityCategory;
+import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
@@ -237,6 +238,7 @@ public abstract class LivingEntityMock extends EntityMock implements LivingEntit
 
 	/**
 	 * Simulate damage to this entity and throw an event.
+	 *
 	 * @param amount <p>The amount of damage to be done</p>
 	 * @param source <p>The damager</p>
 	 * @return <p>The EntityDamageEvent that got thrown</p>
@@ -252,7 +254,14 @@ public abstract class LivingEntityMock extends EntityMock implements LivingEntit
 		EntityDamageEvent event;
 		if (source.getDirectEntity() != null)
 		{
-			event = new EntityDamageByEntityEvent(source.getDirectEntity(), this, EntityDamageEvent.DamageCause.ENTITY_ATTACK, source, amount);
+			event = new EntityDamageByEntityEvent(
+					source.getDirectEntity(),
+					this,
+					source instanceof Projectile
+							? EntityDamageEvent.DamageCause.PROJECTILE
+							: EntityDamageEvent.DamageCause.ENTITY_ATTACK,
+					source,
+					amount);
 		}
 		else
 		{
@@ -267,25 +276,47 @@ public abstract class LivingEntityMock extends EntityMock implements LivingEntit
 		return event;
 	}
 
+	protected DamageType mapEntityToDamageType(Entity source)
+	{
+		if (source == null) return DamageType.GENERIC;
+		return switch (source.getType())
+		{
+			case PLAYER -> DamageType.PLAYER_ATTACK;
+			case TRIDENT -> DamageType.TRIDENT;
+			case ARROW, SPECTRAL_ARROW -> DamageType.ARROW;
+			case FIREBALL, SMALL_FIREBALL, DRAGON_FIREBALL -> DamageType.FIREBALL;
+			case FIREWORK -> DamageType.FIREWORKS;
+			case WITHER_SKULL -> DamageType.WITHER_SKULL;
+			case LIGHTNING -> DamageType.LIGHTNING_BOLT;
+			case FALLING_BLOCK ->
+			{
+				if (((FallingBlock) source).getBlockData().getMaterial().name().contains("ANVIL"))
+				{
+					yield DamageType.FALLING_ANVIL;
+				}
+				else
+				{
+					yield DamageType.FALLING_BLOCK;
+				}
+			}
+			default -> DamageType.MOB_ATTACK;
+		};
+
+	}
+
 	/**
 	 * Simulate damage to this entity and throw an event
+	 *
 	 * @param amount <p>The amount of damage to be done</p>
 	 * @param source <p>The damager</p>
 	 * @return <p>The event that got thrown</p>
 	 */
 	public EntityDamageEvent simulateDamage(double amount, @Nullable Entity source)
 	{
-		DamageType damageType;
+		DamageType damageType = mapEntityToDamageType(source);
+		DamageSource.Builder damageSourceBuilder = DamageSource.builder(damageType);
 		if (source != null)
 		{
-			damageType = source instanceof HumanEntity ? DamageType.PLAYER_ATTACK : DamageType.MOB_ATTACK;
-		}
-		else
-		{
-			damageType = DamageType.GENERIC;
-		}
-		DamageSource.Builder damageSourceBuilder = DamageSource.builder(damageType);
-		if(source != null){
 			damageSourceBuilder.withDamageLocation(source.getLocation()).withDirectEntity(source);
 		}
 		DamageSource damageSource = damageSourceBuilder.build();
